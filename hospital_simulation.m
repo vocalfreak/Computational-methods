@@ -1,5 +1,6 @@
+function hospital_simulation()
+
 clc;
-clear;
 
 simulation_time = 480;  %indicating an 8 hours shift
 lambda = 0.30;
@@ -30,6 +31,8 @@ served_patients = 0;
 total_wait_time = 0;
 clock = 0;
 queue_log = [];
+queue_area = 0;
+last_event_time = 0;
 
 while ~isempty(future_event)
   event_time = [future_event.time];
@@ -40,7 +43,14 @@ while ~isempty(future_event)
   future_event(idx) = [];
 
   clock = current_event.time;
-  queue_log(end+1,:) = [clock, length(queue)];
+
+  event_clock = min(clock, simulation_time);
+  dt = event_clock - last_event_time;
+
+  if dt > 0
+    queue_area = queue_area + (length(queue) * dt);
+    last_event_time = event_clock;
+  endif
 
   if clock > simulation_time
     break;
@@ -80,7 +90,8 @@ while ~isempty(future_event)
 
        doctor(free_doctor).status = 1;
 
-       doctor(free_doctor).busy_time = doctor(free_doctor).busy_time + service_time;
+       busy_within_simulation = min(service_time, simulation_time - clock);
+       doctor(free_doctor).busy_time = doctor(free_doctor).busy_time + busy_within_simulation;
 
        patients(pid).service_start = clock;
 
@@ -133,7 +144,8 @@ while ~isempty(future_event)
 
         patients(best_patient).service_start = clock;
 
-        doctor(did).busy_time = doctor(did).busy_time + service_time;
+        busy_within_simulation = min(service_time, simulation_time - clock);
+        doctor(did).busy_time = doctor(did).busy_time + busy_within_simulation;
 
         dep.time = clock + service_time;
         dep.type = 2;
@@ -143,45 +155,72 @@ while ~isempty(future_event)
         future_event(end + 1) = dep;
     endif
   endif
+
+  queue_log(end+1,:) = [clock, length(queue)];
+
 endwhile
 
-fprintf('\n---Doctor Utilization ---\n');
+if last_event_time < simulation_time
+  queue_area = queue_area + (length(queue) * (simulation_time - last_event_time));
+endif
+
+waits = [];
+
+for i = 1:patient_count
+  if patients(i).service_start >= 0 && patients(i).service_end >= 0
+    waits(end + 1) = patients(i).service_start - patients(i).arrival_time;
+  endif
+endfor
+
+if ~isempty(waits)
+  avg_waiting_time = mean(waits);
+else
+  avg_waiting_time = 0;
+endif
+
+avg_queue_length = queue_area / simulation_time;
+
+total_busy_time = 0;
+
+fprintf('\n--- Doctor Utilization by Doctor ---\n');
+
 for d = 1:num_doctors
-  utilization = doctor(d).busy_time / simulation_time;
-  fprintf('Doctor %d: busy_time = %.2f mins, utilization = %.2f%%\n', d, doctor(d).busy_time, utilization * 100);
-end
+  doctor_utilization = (doctor(d).busy_time / simulation_time) * 100;
+  total_busy_time = total_busy_time + doctor(d).busy_time;
 
-fprintf('queue_log rows: %d\n', size(queue_log, 1));
-fprintf('max queue length seen: %d\n', max(queue_log(:,2)));
+  fprintf('Doctor %d: Busy Time = %.2f minutes, Utilization = %.2f%%\n', ...
+          d, doctor(d).busy_time, doctor_utilization);
+endfor
 
-if exist('queue_log', 'var') && ~isempty(queue_log)
-  total_weighted = 0;
-  for i = 1:size(queue_log, 1) - 1
-    dt = queue_log(i+1,1) - queue_log(i,1);
-    qlen = queue_log(i,2);
-    total_weighted = total_weighted + (qlen * dt);
-  endfor
-  avg_queue_length = total_weighted / clock;
-  fprintf('\nAverage Queue Length: %.4f patients\n', avg_queue_length);
-end
+overall_doctor_utilization = (total_busy_time / (num_doctors * simulation_time)) * 100;
 
+fprintf('\n--- Final Performance Metrics ---\n');
+fprintf('Simulation Time: %d minutes\n', simulation_time);
+fprintf('Number of Doctors: %d\n', num_doctors);
+fprintf('Queue Mode: %s\n', queue_mode);
+fprintf('Total Patients Arrived: %d patients\n', patient_count);
+fprintf('Total Patients Served: %d patients\n', served_patients);
+fprintf('Average Waiting Time: %.4f minutes\n', avg_waiting_time);
+fprintf('Average Queue Length: %.4f patients\n', avg_queue_length);
+fprintf('Overall Doctor Utilization: %.2f%%\n', overall_doctor_utilization);
 
-  waits = [];
+if ~isempty(queue_log)
+  fprintf('Maximum Queue Length: %d patients\n', max(queue_log(:,2)));
+endif
 
-  for i = 1:patient_count
-    if patients(i).service_start >= 0
-      waits(end + 1) = patients(i).service_start - patients(i).arrival_time;
-    endif
-  endfor
+endfunction
+
 function t = generate_interarrival_time(lambda)
   R = rand();
   t = -(1 / lambda) * log(1 - R);
-end
+endfunction
+
 
 function t = generate_service_time(mu)
   R = rand();
   t = -(1 / mu) * log(1 - R);
-end
+endfunction
+
 
 function priority = assign_priority()
 
@@ -193,6 +232,6 @@ function priority = assign_priority()
     priority = 2;
   else
     priority = 3;
-  end
+  endif
 
-end
+endfunction
