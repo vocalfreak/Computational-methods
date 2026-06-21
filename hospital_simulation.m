@@ -11,11 +11,11 @@ clc;
 % SETTINGS
 % ----------------------------------------------------------
 
-simulation_time = 480;        % minutes (8-hour shift)
-lambda          = 0.083;      % arrival rate  (patients per minute)
-mu              = 0.05;       % service rate  (patients per minute per doctor)
-num_doctors     = 2;        % number of doctors
-queue_mode      = 'priority'; % 'fifo' or 'priority'
+simulation_time = 480
+lambda          = 0.05
+mu              = 0.05
+num_doctors     = 2
+queue_mode      = 'priority'
 
 % ----------------------------------------------------------
 % INITIALISE DOCTORS  Aisyah
