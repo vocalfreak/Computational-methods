@@ -1,11 +1,6 @@
 % =========================================================
 % Hospital Emergency Department Queuing Simulation
 % CAM6134-T2610 Group Assignment
-%
-% HOW TO RUN:
-%   hospital_simulation
-%
-% To switch scenarios, edit the SETTINGS block below.
 % =========================================================
 
 function hospital_simulation()
@@ -17,13 +12,13 @@ clc;
 % ----------------------------------------------------------
 
 simulation_time = 480;        % minutes (8-hour shift)
-lambda          = 0.30;       % arrival rate  (patients per minute)
-mu              = 0.30;       % service rate  (patients per minute per doctor)
-num_doctors     = 3;          % number of doctors
+lambda          = 0.083;      % arrival rate  (patients per minute)
+mu              = 0.05;       % service rate  (patients per minute per doctor)
+num_doctors     = 2;        % number of doctors
 queue_mode      = 'priority'; % 'fifo' or 'priority'
 
 % ----------------------------------------------------------
-% INITIALISE DOCTORS  [P3 - Aisyah]
+% INITIALISE DOCTORS  Aisyah
 % ----------------------------------------------------------
 
 for d = 1:num_doctors
@@ -64,7 +59,7 @@ last_event_time = 0;   % tracks when we last updated queue_area
 queue_log       = [];  % records [time, queue_length] at each event
 
 % ==========================================================
-% MAIN EVENT LOOP  [P1 - Syahirah]
+% MAIN EVENT LOOP  Syahirah
 % ==========================================================
 
 while ~isempty(future_event)
@@ -91,9 +86,8 @@ while ~isempty(future_event)
     break;
   end
 
-  % --------------------------------------------------------
-  if current_event.type == 1   % ARRIVAL EVENT
-  % --------------------------------------------------------
+
+  if current_event.type == 1
 
     patient_count = patient_count + 1;
     pid           = patient_count;
@@ -142,9 +136,7 @@ while ~isempty(future_event)
       queue(end + 1) = pid;
     end
 
-  % --------------------------------------------------------
-  else                         % DEPARTURE EVENT
-  % --------------------------------------------------------
+  else
 
     pid = current_event.patientID;
     did = current_event.doctorID;
@@ -216,7 +208,7 @@ if last_event_time < simulation_time
 end
 
 % ==========================================================
-% METRICS  [P4 - Adriana]
+% METRICS  Adrianna
 % ==========================================================
 
 % Collect wait times (time from arrival to service start)
@@ -266,7 +258,7 @@ end   % end function hospital_simulation
 
 
 % ==========================================================
-% FUNCTIONS  [P2 - Alex]
+% FUNCTIONS GENERATORS  CHIAM JUIN HOONG
 % ==========================================================
 
 function t = generate_interarrival_time(lambda)
