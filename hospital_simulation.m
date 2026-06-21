@@ -1,237 +1,309 @@
+% =========================================================
+% Hospital Emergency Department Queuing Simulation
+% CAM6134-T2610 Group Assignment
+% =========================================================
+
 function hospital_simulation()
 
 clc;
 
-simulation_time = 480;  %indicating an 8 hours shift
-lambda = 0.30;
-mu = 0.30;
-num_doctors = 4;
-queue_mode = 'priority';  %either patients follow FIFO or Priority
+% ----------------------------------------------------------
+% SETTINGS
+% ----------------------------------------------------------
+
+simulation_time = 480
+lambda          = 0.05
+mu              = 0.05
+num_doctors     = 2
+queue_mode      = 'priority'
+
+% ----------------------------------------------------------
+% INITIALISE DOCTORS  Aisyah
+% ----------------------------------------------------------
 
 for d = 1:num_doctors
-  doctor(d).status = 0;
-  doctor(d).busy_time = 0;
- end
+  doctor(d).status    = 0;   % 0 = idle, 1 = busy
+  doctor(d).busy_time = 0;   % total minutes this doctor was treating patients
+end
 
-patients = struct([]);
+% ----------------------------------------------------------
+% INITIALISE PATIENTS & QUEUE
+% ----------------------------------------------------------
+
+patients      = struct([]);  % stores each patient's record
 patient_count = 0;
+queue         = [];          % list of patient IDs currently waiting
 
-queue = [];
+% ----------------------------------------------------------
+% INITIALISE FUTURE EVENT LIST  [P1 - Syahirah]
+% Each event has: time, type (1=arrival / 2=departure),
+%                 patientID, doctorID
+% ----------------------------------------------------------
 
 future_event = struct([]);
 
-first_arrival.time = generate_interarrival_time(lambda);
-first_arrival.type = 1;
+first_arrival.time      = generate_interarrival_time(lambda);
+first_arrival.type      = 1;
 first_arrival.patientID = 0;
-first_arrival.doctorID = 0;
+first_arrival.doctorID  = 0;
+future_event(1)         = first_arrival;
 
-future_event(1) = first_arrival;
+% ----------------------------------------------------------
+% COUNTERS
+% ----------------------------------------------------------
 
 served_patients = 0;
-total_wait_time = 0;
-clock = 0;
-queue_log = [];
-queue_area = 0;
-last_event_time = 0;
+clock           = 0;
+queue_area      = 0;   % used to calculate average queue length
+last_event_time = 0;   % tracks when we last updated queue_area
+queue_log       = [];  % records [time, queue_length] at each event
+
+% ==========================================================
+% MAIN EVENT LOOP  Syahirah
+% ==========================================================
 
 while ~isempty(future_event)
-  event_time = [future_event.time];
-  [~, idx] = min(event_time);
 
-
-  current_event = future_event(idx);
-  future_event(idx) = [];
+  % Find the event with the smallest (earliest) time
+  event_times       = [future_event.time];
+  [min_time, idx]   = min(event_times);
+  current_event     = future_event(idx);
+  future_event(idx) = [];   % remove it from the list
 
   clock = current_event.time;
 
-  event_clock = min(clock, simulation_time);
-  dt = event_clock - last_event_time;
-
+  % --- Update time-weighted queue area [P4 - Adriana] ---
+  % We accumulate (queue length * time elapsed) before moving the clock forward.
+  % This lets us calculate average queue length at the end.
+  effective_time = min(clock, simulation_time);
+  dt = effective_time - last_event_time;
   if dt > 0
-    queue_area = queue_area + (length(queue) * dt);
-    last_event_time = event_clock;
-  endif
+    queue_area      = queue_area + (length(queue) * dt);
+    last_event_time = effective_time;
+  end
 
   if clock > simulation_time
     break;
-  endif
+  end
+
 
   if current_event.type == 1
+
     patient_count = patient_count + 1;
-    pid = patient_count;
+    pid           = patient_count;
 
-    patients(pid).arrival_time = clock;
-    patients(pid).priority = assign_priority();
-    patients(pid).service_start = -1;
-    patients(pid).service_end = -1;
+    patients(pid).arrival_time  = clock;
+    patients(pid).priority      = assign_priority();  % [P2 - Alex]
+    patients(pid).service_start = -1;  % -1 means not yet served
+    patients(pid).service_end   = -1;
 
+    % Schedule the next patient arrival  [P2 - Alex]
     next_arrival = clock + generate_interarrival_time(lambda);
-
     if next_arrival <= simulation_time
-      e.time = next_arrival;
-      e.type = 1;
+      e.time      = next_arrival;
+      e.type      = 1;
       e.patientID = 0;
-      e.doctorID = 0;
-
+      e.doctorID  = 0;
       future_event(end + 1) = e;
-    endif
+    end
 
+    % Check if any doctor is free  [P3 - Aisyah]
     free_doctor = 0;
-
     for d = 1:num_doctors
       if doctor(d).status == 0
         free_doctor = d;
         break;
-      endif
-    endfor
+      end
+    end
 
     if free_doctor ~= 0
-      service_time = generate_service_time(mu);
+      % A doctor is available — serve the patient immediately
+      service_time = generate_service_time(mu);  % [P2 - Alex]
 
-       doctor(free_doctor).status = 1;
+      doctor(free_doctor).status    = 1;
+      doctor(free_doctor).busy_time = doctor(free_doctor).busy_time + service_time;
 
-       busy_within_simulation = min(service_time, simulation_time - clock);
-       doctor(free_doctor).busy_time = doctor(free_doctor).busy_time + busy_within_simulation;
+      patients(pid).service_start = clock;
 
-       patients(pid).service_start = clock;
+      dep.time      = clock + service_time;
+      dep.type      = 2;
+      dep.patientID = pid;
+      dep.doctorID  = free_doctor;
+      future_event(end + 1) = dep;
 
-       dep.time = clock +service_time;
-       dep.type = 2;
-       dep.patientID = pid;
-       dep.doctorID = free_doctor;
-
-       future_event(end + 1) = dep;
     else
-       queue(end + 1) = pid;
-    endif
+      % All doctors busy — patient joins the queue
+      queue(end + 1) = pid;
+    end
 
   else
+
     pid = current_event.patientID;
     did = current_event.doctorID;
 
     patients(pid).service_end = clock;
-    served_patients = served_patients + 1;
+    served_patients           = served_patients + 1;
 
     if isempty(queue)
+      % Nobody waiting — doctor goes idle
       doctor(did).status = 0;
+
     else
+      % Someone is waiting — pick the next patient  [P3 - Aisyah]
+
       if strcmp(queue_mode, 'priority')
-        best_index = 1;
+        % Scan the whole queue for the highest priority patient.
+        % Lower priority number = more urgent (1 = Critical).
+        % If two patients share the same priority, pick the one who arrived first.
+        best_index   = 1;
         best_patient = queue(1);
 
         for k = 2:length(queue)
-          current_patient = queue(k);
+          candidate = queue(k);
 
-          if patients(current_patient).priority < patients(best_patient).priority
+          if patients(candidate).priority < patients(best_patient).priority
+            % Found someone more urgent
+            best_patient = candidate;
+            best_index   = k;
 
-            best_patient = current_patient;
-            best_index = k;
-          elseif patients(current_patient).priority == patients(best_patient).priority
-            if patients(current_patient).arrival_time < patients(best_patient).arrival_time
-              best_patient = current_patient;
-              best_index = k;
-            endif
-          endif
-        endfor
-       else
-          best_index = 1;
-          best_patient = queue(1);
-       endif
+          elseif patients(candidate).priority == patients(best_patient).priority
+            % Same urgency — prefer the one who has waited longer
+            if patients(candidate).arrival_time < patients(best_patient).arrival_time
+              best_patient = candidate;
+              best_index   = k;
+            end
+          end
+        end
 
-        queue(best_index) = [];
+      else
+        % FIFO — just take whoever is at the front
+        best_index   = 1;
+        best_patient = queue(1);
+      end
 
-        service_time = generate_service_time(mu);
+      queue(best_index) = [];   % remove chosen patient from queue
 
-        patients(best_patient).service_start = clock;
+      service_time = generate_service_time(mu);  % [P2 - Alex]
+      patients(best_patient).service_start = clock;
 
-        busy_within_simulation = min(service_time, simulation_time - clock);
-        doctor(did).busy_time = doctor(did).busy_time + busy_within_simulation;
+      doctor(did).busy_time = doctor(did).busy_time + service_time;
 
-        dep.time = clock + service_time;
-        dep.type = 2;
-        dep.patientID = best_patient;
-        dep.doctorID = did;
+      dep.time      = clock + service_time;
+      dep.type      = 2;
+      dep.patientID = best_patient;
+      dep.doctorID  = did;
+      future_event(end + 1) = dep;
 
-        future_event(end + 1) = dep;
-    endif
-  endif
+    end
 
-  queue_log(end+1,:) = [clock, length(queue)];
+  end   % end event type check
 
-endwhile
+  queue_log(end + 1, :) = [clock, length(queue)];
 
+end   % end main event loop
+
+% Final queue area top-up (covers remaining time after last event)
 if last_event_time < simulation_time
   queue_area = queue_area + (length(queue) * (simulation_time - last_event_time));
-endif
+end
 
+% ==========================================================
+% METRICS  Adriana
+% ==========================================================
+
+% Collect wait times (time from arrival to service start)
 waits = [];
-
 for i = 1:patient_count
-  if patients(i).service_start >= 0 && patients(i).service_end >= 0
-    waits(end + 1) = patients(i).service_start - patients(i).arrival_time;
-  endif
-endfor
+  if patients(i).service_start >= 0
+    wait = patients(i).service_start - patients(i).arrival_time;
+    waits(end + 1) = wait;
+  end
+end
 
 if ~isempty(waits)
   avg_waiting_time = mean(waits);
 else
   avg_waiting_time = 0;
-endif
+end
 
+% Average queue length = total queue area / total simulation time
 avg_queue_length = queue_area / simulation_time;
 
 total_busy_time = 0;
 
-fprintf('\n--- Doctor Utilization by Doctor ---\n');
-
+fprintf('\n--- Doctor Utilization ---\n');
 for d = 1:num_doctors
-  doctor_utilization = (doctor(d).busy_time / simulation_time) * 100;
+  util            = (doctor(d).busy_time / simulation_time) * 100;
   total_busy_time = total_busy_time + doctor(d).busy_time;
+  fprintf('Doctor %d: Busy Time = %.2f min, Utilization = %.2f%%\n', d, doctor(d).busy_time, util);
+end
 
-  fprintf('Doctor %d: Busy Time = %.2f minutes, Utilization = %.2f%%\n', ...
-          d, doctor(d).busy_time, doctor_utilization);
-endfor
+overall_util = (total_busy_time / (num_doctors * simulation_time)) * 100;
 
-overall_doctor_utilization = (total_busy_time / (num_doctors * simulation_time)) * 100;
-
-fprintf('\n--- Final Performance Metrics ---\n');
-fprintf('Simulation Time: %d minutes\n', simulation_time);
-fprintf('Number of Doctors: %d\n', num_doctors);
-fprintf('Queue Mode: %s\n', queue_mode);
-fprintf('Total Patients Arrived: %d patients\n', patient_count);
-fprintf('Total Patients Served: %d patients\n', served_patients);
-fprintf('Average Waiting Time: %.4f minutes\n', avg_waiting_time);
-fprintf('Average Queue Length: %.4f patients\n', avg_queue_length);
-fprintf('Overall Doctor Utilization: %.2f%%\n', overall_doctor_utilization);
+fprintf('\n--- Performance Metrics ---\n');
+fprintf('Simulation Time        : %d minutes\n',    simulation_time);
+fprintf('Number of Doctors      : %d\n',             num_doctors);
+fprintf('Queue Mode             : %s\n',             queue_mode);
+fprintf('Total Patients Arrived : %d\n',             patient_count);
+fprintf('Total Patients Served  : %d\n',             served_patients);
+fprintf('Average Waiting Time   : %.4f minutes\n',  avg_waiting_time);
+fprintf('Average Queue Length   : %.4f patients\n', avg_queue_length);
+fprintf('Overall Utilization    : %.2f%%\n',         overall_util);
 
 if ~isempty(queue_log)
-  fprintf('Maximum Queue Length: %d patients\n', max(queue_log(:,2)));
-endif
+  fprintf('Maximum Queue Length   : %d patients\n', max(queue_log(:,2)));
+end
 
-endfunction
+% ==========================================================
+% OUTPUT Chiam Juin Hoong
+% ==========================================================
+
+fprintf('\nPatient Log:\n');
+fprintf('No. | Priority | Arrival | Service Start | Service End | Wait\n');
+fprintf('------------------------------------------------------------\n');
+
+for i = 1:patient_count
+  if patients(i).service_start >= 0
+    wait = patients(i).service_start - patients(i).arrival_time;
+    fprintf('%3d | %8d | %7.2f | %9.2f | %7.2f | %6.2f\n', ...
+      i, patients(i).priority, patients(i).arrival_time, ...
+      patients(i).service_start, patients(i).service_end, wait);
+  else
+    fprintf('%3d | %8d | %7.2f | not served\n', ...
+      i, patients(i).priority, patients(i).arrival_time);
+  end
+end
+
+end   % end function hospital_simulation
+
+
+% ==========================================================
+% FUNCTIONS GENERATORS  CHIAM JUIN HOONG
+% ==========================================================
 
 function t = generate_interarrival_time(lambda)
+  % Generates time until next patient arrives
+  % Formula: X = -(1/lambda) * ln(1 - R),  R ~ Uniform(0,1)
   R = rand();
   t = -(1 / lambda) * log(1 - R);
-endfunction
-
+end
 
 function t = generate_service_time(mu)
+  % Generates how long a doctor takes to treat one patient
+  % Formula: X = -(1/mu) * ln(1 - R),  R ~ Uniform(0,1)
   R = rand();
   t = -(1 / mu) * log(1 - R);
-endfunction
-
+end
 
 function priority = assign_priority()
-
+  % Assigns a priority level based on patient condition
+  % 1 = Critical (10%)  |  2 = Urgent (30%)  |  3 = Normal (60%)
   R = rand();
-
   if R < 0.10
     priority = 1;
   elseif R < 0.40
     priority = 2;
   else
     priority = 3;
-  endif
-
-endfunction
+  end
+end
