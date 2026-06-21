@@ -254,6 +254,26 @@ if ~isempty(queue_log)
   fprintf('Maximum Queue Length   : %d patients\n', max(queue_log(:,2)));
 end
 
+% ==========================================================
+% OUTPUT Chiam Juin Hoong
+% ==========================================================
+
+fprintf('\nPatient Log:\n');
+fprintf('No. | Priority | Arrival | Service Start | Service End | Wait\n');
+fprintf('------------------------------------------------------------\n');
+
+for i = 1:patient_count
+  if patients(i).service_start >= 0
+    wait = patients(i).service_start - patients(i).arrival_time;
+    fprintf('%3d | %8d | %7.2f | %9.2f | %7.2f | %6.2f\n', ...
+      i, patients(i).priority, patients(i).arrival_time, ...
+      patients(i).service_start, patients(i).service_end, wait);
+  else
+    fprintf('%3d | %8d | %7.2f | not served\n', ...
+      i, patients(i).priority, patients(i).arrival_time);
+  end
+end
+
 end   % end function hospital_simulation
 
 
