@@ -107,7 +107,7 @@ while ~isempty(future_event)
       future_event(end + 1) = e;
     end
 
-    % Check if any doctor is free  [P3 - Aisyah]
+    % Check if any doctor is free
     free_doctor = 0;
     for d = 1:num_doctors
       if doctor(d).status == 0
@@ -118,7 +118,7 @@ while ~isempty(future_event)
 
     if free_doctor ~= 0
       % A doctor is available — serve the patient immediately
-      service_time = generate_service_time(mu);  % [P2 - Alex]
+      service_time = generate_service_time(mu);
 
       doctor(free_doctor).status    = 1;
       doctor(free_doctor).busy_time = doctor(free_doctor).busy_time + service_time;
@@ -145,11 +145,11 @@ while ~isempty(future_event)
     served_patients           = served_patients + 1;
 
     if isempty(queue)
-      % Nobody waiting — doctor goes idle
+      % Nobody waiting, doctor goes idle
       doctor(did).status = 0;
 
     else
-      % Someone is waiting — pick the next patient  [P3 - Aisyah]
+      % Someone is waiting, pick the next patient
 
       if strcmp(queue_mode, 'priority')
         % Scan the whole queue for the highest priority patient.
