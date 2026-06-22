@@ -208,7 +208,7 @@ if last_event_time < simulation_time
 end
 
 % ==========================================================
-% METRICS  Adrianna
+% METRICS  Adriana
 % ==========================================================
 
 % Collect wait times (time from arrival to service start)
